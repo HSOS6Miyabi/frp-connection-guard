@@ -28,3 +28,9 @@ jobs:
         run: cargo build --release
       - name: Simulate malicious connection requests and restart
         run: python3 tests/attack_sim.py target/release/frp-connection-guard
+      - name: Upload Linux executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: frp-connection-guard-linux-amd64
+          path: target/release/frp-connection-guard
+          if-no-files-found: error
