@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::{error::Error, fs, io, path::Path};
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub server: Server,
@@ -56,17 +56,6 @@ pub struct Storage {
     pub sqlite_path: String,
 }
 
-impl Default for Settings {
-    fn default() -> Self {
-        Self {
-            server: Server::default(),
-            protection: Protection::default(),
-            limits: Limits::default(),
-            access: Access::default(),
-            storage: Storage::default(),
-        }
-    }
-}
 impl Default for Server {
     fn default() -> Self {
         Self {
