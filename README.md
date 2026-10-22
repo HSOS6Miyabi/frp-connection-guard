@@ -18,6 +18,26 @@ A standalone Rust server-management plugin for **frps**, designed to protect nam
 
 The frps server plugin client uses ordinary Go `net/http` and does not provide Unix-domain-socket configuration. The frpc `unix_domain_socket` *client plugin* is a separate feature. Use the local TCP listener shown below. Do not make it publicly accessible.
 
+## Download prebuilt executables
+
+Prebuilt archives are published at **[GitHub Releases](https://github.com/HSOS6Miyabi/frp-connection-guard/releases)** after all automated tests, release builds, and archive-integrity checks succeed.
+
+| Platform | Architecture | Format |
+|---|---|---|
+| Linux | x86_64 (AMD64), AArch64 (ARM64) | `.tar.gz` |
+| Windows | x86_64 (AMD64), ARM64 | `.zip` |
+| macOS | Intel x86_64, Apple Silicon ARM64 | `.tar.gz` |
+
+Each archive contains the executable, `config/guard.toml`, `config/frps.toml`, and `README.md`. A matching `.sha256` file is published for every archive. For example, verify a Linux release using `sha256sum -c <archive-name>.sha256` from the folder containing both files.
+
+### Automatic releases
+
+- Every successful push to `main` creates an automatically numbered development prerelease (tag `ci-<run-number>`). All six platform builds must finish successfully before the release becomes public.
+- Pushing a tag matching the version in `Cargo.toml`, such as `v0.1.0`, creates a stable release with automatically generated release notes after all checks pass.
+- Pull requests run tests and static analysis without publishing releases.
+- A manual run of **CI and Release** from `main` also produces a development prerelease.
+- If any test, compilation, or archive validation fails, the release job does not run.
+
 ## Install
 
 1. Install a recent stable Rust toolchain.
