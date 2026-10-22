@@ -1,0 +1,22 @@
+[package]
+name = "frp-connection-guard"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Persistent IPv4/IPv6 connection rate guard for frps server plugins"
+license = "MIT"
+
+[dependencies]
+axum = "0.8"
+dashmap = "6.1"
+globset = "0.4"
+ipnet = { version = "2", features = ["serde"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+toml = "0.8"
+
+[dev-dependencies]
+tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
