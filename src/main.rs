@@ -105,7 +105,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::{body::{to_bytes, Body}, http::{Request, StatusCode}};
+    use axum::{
+        body::{to_bytes, Body},
+        http::{Request, StatusCode},
+    };
     use serde_json::{json, Value};
     use tempfile::TempDir;
     use tower::ServiceExt;
@@ -124,15 +127,18 @@ mod tests {
             .method("POST")
             .uri("/handler?version=0.1.0&op=NewUserConn")
             .header("content-type", "application/json")
-            .body(Body::from(json!({
-                "version":"0.1.0",
-                "op":op,
-                "content": {
-                    "proxy_name":"ssh-access",
-                    "proxy_type":"tcp",
-                    "remote_addr":address
-                }
-            }).to_string()))
+            .body(Body::from(
+                json!({
+                    "version":"0.1.0",
+                    "op":op,
+                    "content": {
+                        "proxy_name":"ssh-access",
+                        "proxy_type":"tcp",
+                        "remote_addr":address
+                    }
+                })
+                .to_string(),
+            ))
             .unwrap();
         let reply = router.oneshot(request).await.unwrap();
         let status = reply.status();
@@ -152,7 +158,10 @@ mod tests {
         assert_eq!(b["reject"], false);
         assert_eq!(status, StatusCode::OK);
         assert_eq!(c["reject"], true);
-        assert_eq!(c["reject_reason"], "connection frequency exceeded; IP banned");
+        assert_eq!(
+            c["reject_reason"],
+            "connection frequency exceeded; IP banned"
+        );
     }
 
     #[tokio::test]
