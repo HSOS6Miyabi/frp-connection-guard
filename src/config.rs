@@ -2,7 +2,7 @@ use serde::Deserialize;
 use std::{error::Error, fs, io, path::Path};
 
 #[derive(Clone, Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Settings {
     pub server: Server,
     pub protection: Protection,
@@ -12,7 +12,7 @@ pub struct Settings {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Server {
     pub listen: String,
     pub path: String,
@@ -20,7 +20,7 @@ pub struct Server {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Protection {
     pub name_patterns: Vec<String>,
     pub case_insensitive: bool,
@@ -28,7 +28,7 @@ pub struct Protection {
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Limits {
     pub short_window_secs: u64,
     pub short_max_connections: usize,
@@ -44,14 +44,14 @@ pub struct Limits {
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Access {
     pub allow_cidrs: Vec<ipnet::IpNet>,
     pub deny_cidrs: Vec<ipnet::IpNet>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
-#[serde(default)]
+#[serde(default, deny_unknown_fields)]
 pub struct Storage {
     pub sqlite_path: String,
 }
@@ -165,6 +165,14 @@ mod tests {
         let mut config = Settings::default();
         config.limits.short_window_secs = 0;
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn reject_unknown_configuration_keys() {
+        let parsed = toml::from_str::<Settings>(
+            "[limits]\nban_duraton_secs = 5",
+        );
+        assert!(parsed.is_err());
     }
 
     #[test]
