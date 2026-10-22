@@ -56,10 +56,10 @@ fn unix_now() -> i64 {
 fn source_ip(address: &str) -> Option<IpAddr> {
     let parsed = address.parse::<SocketAddr>().ok()?.ip();
     match parsed {
-        IpAddr::V6(ipv6) => ipv6
-            .to_ipv4_mapped()
-            .map(IpAddr::V4)
-            .or(Some(IpAddr::V6(ipv6))),
+        IpAddr::V6(ipv6) => match ipv6.to_ipv4_mapped() {
+            Some(ipv4) => Some(IpAddr::V4(ipv4)),
+            None => Some(IpAddr::V6(ipv6)),
+        },
         other => Some(other),
     }
 }
@@ -364,28 +364,6 @@ mod tests {
             guard.inspect_at("ssh", "tcp", "203.0.113.1:1234", t + Duration::from_millis(900), 100),
             Verdict::Reject("connection frequency exceeded; IP banned")
         );
-    }
-
-    #[test]
-    fn persistent_bans_survive_restarts_and_expire() {
-        let (temp, guard) = fixture();
-        let path = guard.config.storage.sqlite_path.clone();
-        let t = Instant::now();
-        for i in 0..4 {
-            let _ = guard.inspect_at(
-                "ssh", "tcp", "[2001:db8::9]:9999",
-                t + Duration::from_millis(50 * i),
-                2000,
-            );
-        }
-        drop(guard);
-        let mut config = Settings::default();
-        config.storage.sqlite_path = path;
-        let restored = Guard::new(config).unwrap();
-        // Simulate the historical clock only for the decision; startup cleans
-        // records expired in the real world, so use a future epoch in the test.
-        assert!(temp.path().exists());
-        let _ = restored; // See the dedicated current-time persistence test.
     }
 
     #[test]
