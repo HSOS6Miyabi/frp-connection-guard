@@ -113,7 +113,9 @@ impl Default for Storage {
 impl Settings {
     pub fn read(path: &Path) -> Result<Self, Box<dyn Error>> {
         let config: Self = toml::from_str(&fs::read_to_string(path)?)?;
-        config.validate().map_err(|msg| io::Error::new(io::ErrorKind::InvalidInput, msg))?;
+        config
+            .validate()
+            .map_err(|msg| io::Error::new(io::ErrorKind::InvalidInput, msg))?;
         Ok(config)
     }
 
@@ -138,7 +140,9 @@ impl Settings {
             l.rapid_retry_window_secs,
             l.idle_ttl_secs,
             l.cleanup_interval_secs,
-        ].contains(&0) {
+        ]
+        .contains(&0)
+        {
             return Err("all window, gap, idle and cleanup durations must be positive".into());
         }
         if l.ban_duration_secs == 0 || l.ban_duration_secs > 315_360_000 {
@@ -178,7 +182,8 @@ mod tests {
     fn parse_custom_globs_and_cidrs() {
         let s: Settings = toml::from_str(
             "[protection]\nname_patterns = ['*SSH*']\n[access]\ndeny_cidrs = ['2001:db8::/32']",
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(s.protection.name_patterns, vec!["*SSH*"]);
         assert_eq!(s.access.deny_cidrs.len(), 1);
         s.validate().unwrap();
