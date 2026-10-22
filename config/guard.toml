@@ -1,0 +1,29 @@
+[server]
+listen = "127.0.0.1:9000"
+path = "/handler"
+max_body_bytes = 16384
+
+[protection]
+name_patterns = ["*ssh*", "*rdp*"]
+case_insensitive = true
+proxy_types = ["tcp", "stcp", "https", "tcpmux"]
+
+[limits]
+short_window_secs = 10
+short_max_connections = 6
+long_window_secs = 60
+long_max_connections = 20
+rapid_retry_gap_ms = 1500
+rapid_retry_window_secs = 30
+rapid_retry_max = 4
+ban_duration_secs = 3600
+max_tracked_ips = 100000
+idle_ttl_secs = 600
+cleanup_interval_secs = 60
+
+[access]
+allow_cidrs = []
+deny_cidrs = []
+
+[storage]
+sqlite_path = "./frp-connection-guard.sqlite3"
