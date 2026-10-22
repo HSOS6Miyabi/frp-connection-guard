@@ -1,0 +1,26 @@
+name: Rust CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+      - name: Compile and unit-test
+        run: cargo test --all-targets
+      - name: Static analysis
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Build release binary
+        run: cargo build --release
+      - name: Simulate malicious connection requests and restart
+        run: python3 tests/attack_sim.py target/release/frp-connection-guard
