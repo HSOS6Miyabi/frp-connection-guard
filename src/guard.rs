@@ -262,6 +262,9 @@ impl Guard {
         let epoch = unix_now();
         let ttl = Duration::from_secs(self.config.limits.idle_ttl_secs);
         self.activities.retain(|_, state| {
+            if Arc::strong_count(state) > 1 {
+                return true;
+            }
             let state = state
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
