@@ -1,36 +1,141 @@
-name: Rust CI
+name: CI and Release
 
 on:
   push:
+    branches: [main]
+    tags: ['v*']
   pull_request:
+    branches: [main]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 concurrency:
   group: frp-guard-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    name: Test and static analysis
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Verify formatting
+      - name: Verify Rust formatting
         run: cargo fmt --all -- --check
-      - name: Compile and unit-test
+      - name: Compile and run Rust unit tests
         run: cargo test --all-targets
-      - name: Static analysis
+      - name: Run Clippy
         run: cargo clippy --all-targets -- -D warnings
-      - name: Build release binary
+      - name: Test release packaging and integrity verification
+        run: python3 -W error -m unittest discover -s tests -p test_release_scripts.py -v
+      - name: Build Linux AMD64 executable for attack simulation
         run: cargo build --release
       - name: Simulate malicious connection requests and restart
         run: python3 tests/attack_sim.py target/release/frp-connection-guard
-      - name: Upload Linux executable
+      - name: Validate version tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
+          if [[ "$GITHUB_REF_NAME" != "v${version}" ]]; then
+            echo "Tag $GITHUB_REF_NAME does not match Cargo.toml version v${version}" >&2
+            exit 1
+          fi
+
+  build:
+    name: Build ${{ matrix.platform }} ${{ matrix.arch }}
+    needs: test
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04,     target: x86_64-unknown-linux-gnu, platform: linux,   arch: amd64 }
+          - { runner: ubuntu-24.04-arm, target: aarch64-unknown-linux-gnu,  platform: linux,   arch: arm64 }
+          - { runner: windows-2025,     target: x86_64-pc-windows-msvc,    platform: windows, arch: amd64 }
+          - { runner: windows-11-arm,   target: aarch64-pc-windows-msvc,   platform: windows, arch: arm64 }
+          - { runner: macos-15-intel,   target: x86_64-apple-darwin,       platform: macos,   arch: amd64 }
+          - { runner: macos-15,         target: aarch64-apple-darwin,      platform: macos,   arch: arm64 }
+    runs-on: ${{ matrix.runner }}
+    env:
+      RELEASE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('ci-{0}', github.run_number) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Compile release binary
+        shell: bash
+        run: cargo build --release --target '${{ matrix.target }}'
+      - name: Create platform archive and SHA-256 checksum
+        shell: bash
+        run: |
+          binary="target/${{ matrix.target }}/release/frp-connection-guard"
+          if [[ '${{ matrix.platform }}' == 'windows' ]]; then
+            binary="${binary}.exe"
+          fi
+          python scripts/package_release.py \
+            --version "$RELEASE_VERSION" \
+            --platform '${{ matrix.platform }}' \
+            --arch '${{ matrix.arch }}' \
+            --binary "$binary" \
+            --output dist
+      - name: Store platform release archive
         uses: actions/upload-artifact@v4
         with:
-          name: frp-connection-guard-linux-amd64
-          path: target/release/frp-connection-guard
+          name: release-${{ matrix.platform }}-${{ matrix.arch }}
+          path: dist/*
           if-no-files-found: error
+          retention-days: 14
+
+  release:
+    name: Publish verified Release
+    needs: [test, build]
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v'))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('ci-{0}', github.run_number) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
+      - name: Confirm all platforms and checksums
+        run: python3 scripts/verify_release_assets.py --version "$RELEASE_VERSION" --directory dist
+      - name: Publish after complete verification
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            gh release create "$RELEASE_VERSION" dist/* \
+              --verify-tag \
+              --draft \
+              --generate-notes \
+              --title "$RELEASE_VERSION"
+          else
+            gh release create "$RELEASE_VERSION" dist/* \
+              --target "$GITHUB_SHA" \
+              --draft \
+              --prerelease \
+              --latest=false \
+              --title "Development build #$GITHUB_RUN_NUMBER" \
+              --notes "Automated CI build from commit $GITHUB_SHA. All unit, static-analysis, attack-simulation and six-platform packaging checks passed. This is a development prerelease."
+          fi
+          gh release edit "$RELEASE_VERSION" --draft=false
