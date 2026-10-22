@@ -1,0 +1,7 @@
+# Merge this section into your existing frps.toml.
+# Run the guard on the SAME HOST as frps. Never expose port 9000 publicly.
+[[httpPlugins]]
+name = "connection-guard"
+addr = "127.0.0.1:9000"
+path = "/handler"
+ops = ["NewUserConn"]
