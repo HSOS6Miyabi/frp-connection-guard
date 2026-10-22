@@ -169,9 +169,7 @@ mod tests {
 
     #[test]
     fn reject_unknown_configuration_keys() {
-        let parsed = toml::from_str::<Settings>(
-            "[limits]\nban_duraton_secs = 5",
-        );
+        let parsed = toml::from_str::<Settings>("[limits]\nban_duraton_secs = 5");
         assert!(parsed.is_err());
     }
 
