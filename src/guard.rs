@@ -107,9 +107,9 @@ impl Guard {
             })?;
             for row in rows {
                 let (key, expiry) = row?;
-                let ip = key.parse::<IpAddr>().map_err(|_| {
-                    io::Error::new(io::ErrorKind::InvalidData, "invalid stored IP")
-                })?;
+                let ip = key
+                    .parse::<IpAddr>()
+                    .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "invalid stored IP"))?;
                 banned.insert(ip, expiry);
             }
         }
@@ -138,10 +138,22 @@ impl Guard {
             return Verdict::Reject("invalid remote address");
         };
 
-        if self.config.access.deny_cidrs.iter().any(|cidr| cidr.contains(&ip)) {
+        if self
+            .config
+            .access
+            .deny_cidrs
+            .iter()
+            .any(|cidr| cidr.contains(&ip))
+        {
             return Verdict::Reject("IP blocked by static deny list");
         }
-        if self.config.access.allow_cidrs.iter().any(|cidr| cidr.contains(&ip)) {
+        if self
+            .config
+            .access
+            .allow_cidrs
+            .iter()
+            .any(|cidr| cidr.contains(&ip))
+        {
             return Verdict::Allow;
         }
         if self.is_banned(ip, epoch) {
@@ -172,7 +184,9 @@ impl Guard {
             .entry(ip)
             .or_insert_with(|| Arc::new(Mutex::new(Activity::new(now))))
             .clone();
-        let mut state = state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut state = state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         // Another request from this source might have triggered a ban while we waited.
         if self.is_banned(ip, epoch) {
             return Verdict::Reject("IP temporarily banned");
@@ -195,11 +209,9 @@ impl Guard {
             Duration::from_secs(rules.rapid_retry_window_secs),
         );
 
-        if state
-            .previous
-            .is_some_and(|prior| now.saturating_duration_since(prior)
-                <= Duration::from_millis(rules.rapid_retry_gap_ms))
-        {
+        if state.previous.is_some_and(|prior| {
+            now.saturating_duration_since(prior) <= Duration::from_millis(rules.rapid_retry_gap_ms)
+        }) {
             state.rapid.push_back(now);
         }
         state.short.push_back(now);
@@ -250,7 +262,9 @@ impl Guard {
         let epoch = unix_now();
         let ttl = Duration::from_secs(self.config.limits.idle_ttl_secs);
         self.activities.retain(|_, state| {
-            let state = state.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let state = state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             now.saturating_duration_since(state.seen) < ttl
         });
         self.banned.retain(|_, expiry| *expiry > epoch);
@@ -338,7 +352,9 @@ mod tests {
         for offset in [0, 1, 2, 11] {
             assert_eq!(
                 guard.inspect_at(
-                    "ssh", "tcp", "198.51.100.4:1010",
+                    "ssh",
+                    "tcp",
+                    "198.51.100.4:1010",
                     t + Duration::from_secs(offset),
                     1_700_000_000 + offset as i64,
                 ),
@@ -356,12 +372,24 @@ mod tests {
         let t = Instant::now();
         for offset in [0, 500] {
             assert_eq!(
-                guard.inspect_at("ssh", "tcp", "203.0.113.1:1234", t + Duration::from_millis(offset), 100),
+                guard.inspect_at(
+                    "ssh",
+                    "tcp",
+                    "203.0.113.1:1234",
+                    t + Duration::from_millis(offset),
+                    100
+                ),
                 Verdict::Allow
             );
         }
         assert_eq!(
-            guard.inspect_at("ssh", "tcp", "203.0.113.1:1234", t + Duration::from_millis(900), 100),
+            guard.inspect_at(
+                "ssh",
+                "tcp",
+                "203.0.113.1:1234",
+                t + Duration::from_millis(900),
+                100
+            ),
             Verdict::Reject("connection frequency exceeded; IP banned")
         );
     }
@@ -408,7 +436,10 @@ mod tests {
             guard.inspect("rdp", "tcp", "[2001:db8:dead::1]:5"),
             Verdict::Reject("IP blocked by static deny list")
         );
-        assert_eq!(guard.inspect("rdp", "tcp", "[2001:db8::1]:5"), Verdict::Allow);
+        assert_eq!(
+            guard.inspect("rdp", "tcp", "[2001:db8::1]:5"),
+            Verdict::Allow
+        );
     }
 
     #[test]
@@ -430,12 +461,24 @@ mod tests {
         let t = Instant::now();
         for offset in [0, 12, 24] {
             assert_eq!(
-                guard.inspect_at("ssh", "tcp", "203.0.113.4:22", t + Duration::from_secs(offset), 100),
+                guard.inspect_at(
+                    "ssh",
+                    "tcp",
+                    "203.0.113.4:22",
+                    t + Duration::from_secs(offset),
+                    100
+                ),
                 Verdict::Allow
             );
         }
         assert_eq!(
-            guard.inspect_at("ssh", "tcp", "203.0.113.4:22", t + Duration::from_secs(36), 100),
+            guard.inspect_at(
+                "ssh",
+                "tcp",
+                "203.0.113.4:22",
+                t + Duration::from_secs(36),
+                100
+            ),
             Verdict::Reject("connection frequency exceeded; IP banned")
         );
     }
@@ -444,7 +487,10 @@ mod tests {
     fn tracking_capacity_rejects_new_sources() {
         let (_temp, mut guard) = fixture();
         guard.config.limits.max_tracked_ips = 1;
-        assert_eq!(guard.inspect("ssh", "tcp", "198.51.100.1:20"), Verdict::Allow);
+        assert_eq!(
+            guard.inspect("ssh", "tcp", "198.51.100.1:20"),
+            Verdict::Allow
+        );
         assert_eq!(
             guard.inspect("ssh", "tcp", "198.51.100.2:20"),
             Verdict::Reject("connection tracking capacity exceeded")
@@ -456,7 +502,13 @@ mod tests {
         let (_temp, guard) = fixture();
         let t = Instant::now();
         for i in 0..4 {
-            let _ = guard.inspect_at("ssh", "tcp", "192.0.2.8:22", t + Duration::from_millis(i * 20), 100);
+            let _ = guard.inspect_at(
+                "ssh",
+                "tcp",
+                "192.0.2.8:22",
+                t + Duration::from_millis(i * 20),
+                100,
+            );
         }
         assert_eq!(
             guard.inspect_at("other", "tcp", "192.0.2.8:23", t, 3701),
